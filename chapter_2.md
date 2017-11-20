@@ -2,7 +2,7 @@
 ## 第二章 - 型を信じろ!
 
 ### 明示的な型宣言
-ghci`:t`を使うことで変数、関数の型を確認することができる
+ghciで`:t`を使うことで変数、関数の型を確認することができる
 ```
 Prelude> :t 'a'
 'a' :: Char
@@ -13,7 +13,7 @@ Prelude> :t "Hello"
 Prelude> :t (True, 'a')
 (True, 'a') :: (Bool, Char)
 ```
-`::`は「の型を持つ」と読む(らしい)。  
+`::`は「の型を持つ」と読む(らしい)。型注釈。  
 `::`を使って関数に明示的な型宣言を行うこともできる。  
 ```
 // 一章で出てきたdoubleMe, doubleUsに型宣言をしている例
@@ -81,3 +81,110 @@ False
 Prelude> 4 /= 5
 True
 ```
+以下より一般的な型クラスの紹介をする
+
+#### Ord型クラス
+順序比較ができる型のための型クラス。`compare`を実装していればインスタンスになれる。  
+```
+Prelude> :t compare
+compare :: Ord a => a -> a -> Ordering
+Prelude> compare 4 5
+LT
+Prelude> compare 4 4
+EQ
+Prelude> compare 4 3
+GT
+
+// 比較演算子もOrd型クラスのメソッド
+Prelude> 4 > 1
+True
+Prelude> 4 < 10
+True
+Prelude> 4 <= 10
+True
+```
+
+#### Show型クラス
+ある値は、その型がShow型クラスのインスタンスであれば文字列として表現できる。  
+```
+Prelude> show 4
+"4"
+Prelude> show True
+"True"
+Prelude> show "hoge"
+"\"hoge\""
+```
+
+#### Read型クラス
+Showと対をなす型クラス。文字列を受け取ってRead型クラスのインスタンスのうちどれかの型として値を返す。
+```
+Prelude> read "True" || False
+True
+Prelude> read "8.2" + 3.8
+12.0
+Prelude> read "5" -2
+3
+Prelude> read "[1,2,3,4]" ++ [5]
+[1,2,3,4,5]
+```
+コンパイラが型を推論できる形にしてやらないとエラーとなる。
+```
+Prelude> read "8"
+*** Exception: Prelude.read: no parse
+```
+`"8"`だけだと何を返せばいいのかわからない。
+もし単体で使いたいなら明示的に型注釈の`::`で型を指定してやる必要がある。
+```
+Prelude> read "8" :: Int
+8
+Prelude> read "True" :: Bool
+True
+```
+型を知るための最小限の文脈さえ分かればコンパイラは型推論ができる。
+```
+Prelude> [read "True", False, True]
+[True,False,True]
+```
+
+#### Enum型クラス
+列挙型。順番に並んだ値を列挙できる型。  
+`succ`や`pred`関数がEnum型クラスのインスタンスの定義する関数。  
+```
+Prelude> [1..10]
+[1,2,3,4,5,6,7,8,9,10]
+Prelude> ['a'..'e']
+"abcde"
+Prelude> succ 4
+5
+Prelude> pred 4
+3
+```
+
+#### Bounded型クラス
+この型クラスのインスタンスは上限と加減を持ち、それぞれminBoundとmaxBound関数で調べられる。  
+```
+Prelude> minBound :: Word
+0
+Prelude> maxBound :: Word
+18446744073709551615
+Prelude> minBound :: Int
+-9223372036854775808
+Prelude> maxBound  :: Int
+9223372036854775807
+Prelude> minBound  :: Char
+'\NUL'
+Prelude> maxBound  :: Char
+'\1114111'
+```
+
+#### Num型クラス
+数の型クラス、この型クラスのインスタンスは数のように振る舞う。  
+`+`, `-`, `*`などの演算子がこの型クラスのメソッドとなる。  
+
+#### 最後に - 型クラスに関するいくつかの注意点
+型クラスは他の型クラスのインスタンスとして定義もできる。  
+型をある型クラスのインスタンスにするために、まずは別の型クラスのインスタンスにする必要がある場合がある。  
+
+(例)  
+Ord型クラスのインスタンスとなるためにはEq型クラスのインスタンスでなえればならない。  
+大小比較するためには等値比較もできなきゃダメだよっていうこと。
