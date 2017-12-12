@@ -333,7 +333,7 @@ Prelude> suml = foldl1 (+)
 // xを消したい
 Prelude> fn x = ceiling (negate (tan (cos (max 50 x))))
 
-// ポイントフリースタイルで記述する事で見た目もすっきりしてxを消す事ができた
+// ポイントフリースタイル及び関数合成で記述する事で見た目もすっきりしてxを消す事ができた
 fn = ceiling . negate . tan . cos . max 50
 ```
 
