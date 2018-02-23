@@ -241,7 +241,196 @@ Prelude> (1 * 2) * 3
 6
 ```
 
-Haskellでは当然のことながらこれらの性質を満たすモノイドのインスタンスが定義されている。それが**Sum**と**Product**になる。以下はProductの定義。
+Haskellでは当然のことながらこれらの性質を満たすモノイドのインスタンスが定義されている。それが**Sum**と**Product**になる。以下はSum及びProductの定義。
 
 ```
+newtype Sum a = Sum {getSum:: a } deriving (Eq, Ord, Show, Read, Bounded)
+
+instance Monoid (Sum a) where
+  mempty = Sum 0
+  Sum x `mappend` Sum y = Sum (x + y)
+
+newtype Product a = Product {getProduct :: a } deriving (Eq, Ord, Show, Read, Bounded)
+
+instance Monoid (Product a) where
+  mempty = Product 1
+  Product x `mappend` Product y = Product (x * y)
+```
+
+Sum及びProductのmemptyは単純に0及び1をがそれぞれ+と\*の単位元となるためSum,Productに包んでいる。  
+mappendについては+と\*の機能をそれぞれに持たせているにすぎない。
+
+```
+// Sum
+*Main> mempty :: Sum Int
+Sum {getSum = 0}
+*Main> Sum 1 `mappend` Sum 0
+Sum {getSum = 1}
+*Main> Sum 0 `mappend` Sum 1
+Sum {getSum = 1}
+*Main> Sum 1 `mappend` (Sum 2 `mappend` Sum 3)
+Sum {getSum = 6}
+*Main> (Sum 1 `mappend` Sum 2) `mappend` Sum 3
+Sum {getSum = 6}
+
+// Product
+*Main> mempty :: Product Double
+Product {getProduct = 1.0}
+*Main> Product 1 `mappend` Product 2
+Product {getProduct = 2}
+*Main> Product 2 `mappend` Product 1
+Product {getProduct = 2}
+*Main> Product 2 `mappend` (Product 3 `mappend` Product 4)
+Product {getProduct = 24}
+*Main> (Product 2 `mappend` Product 3) `mappend` Product 4
+Product {getProduct = 24}
+```
+
+上の例はモノイド則を満たしていることが分かる。
+
+#### AnyとAll
+Boolでもモノイドになり得る。  
+`||`及び`&&`がそれにあたる。Any,Allの名前から推測できるがAnyは一つでもTrueがあればTrueになり、Allは一つでもFalseがあればFalseとなる。定義は以下になる。
+
+```
+newtype Any = Any { getAny :: Bool } deriving (Eq, Ord, Read, Show, Bounded)
+
+instance Monoid Any where
+  mempty = Any False
+  Any x `mappend` Any y = Any (x || y)
+
+newtype All = All { getAll :: Bool } deriving (Eq, Ord, Read, Show, Bounded)
+
+instance Monoid All where
+  mempty = All True
+  All x `mappend` All y = All (x && y)
+```
+
+以下は使い方例。
+
+```
+// Any
+*Main> Any False `mappend` Any True
+Any {getAny = True}
+*Main> Any True `mappend` Any False
+Any {getAny = True}
+*Main> Any False `mappend` (Any False `mappend` Any True)
+Any {getAny = True}
+*Main> (Any False `mappend` Any False) `mappend` Any True
+Any {getAny = True}
+```
+
+#### Maybeモノイド
+Maybe aもモノイドになれる。  
+ただしMaybe aがモノイドになるには型aがモノイドでなければならないという型クラス制約があり、Nothingを単位元とする。以下がインスタンス定義となる。
+
+```
+instance (Monoid a) => Monoid (Maybe a) where
+  mempty = Nothing
+  Nothing `mappend` m = m
+  m `mappend` Nothing = m
+  (Just m1) `mappend` (Just m2) = Just (m1 `mappend` m2)
+```
+
+定義の中でm1 \`mappend\` m2ができるのはaがMonoid型クラスのインスタンスであるという型クラス制約があるからである。  
+
+```
+*Main> Nothing `mappend` Just [1..10]
+Just [1,2,3,4,5,6,7,8,9,10]
+*Main> Just [1..5] `mappend` Just [6..10]
+Just [1,2,3,4,5,6,7,8,9,10]
+*Main> Just (Sum 10) `mappend` Just (Sum 20)
+Just (Sum {getSum = 30})
+*Main> Just (Sum 10) `mappend` Nothing
+Just (Sum {getSum = 10})
+```
+
+さらにMaybeを包んだFirstもあるがここでは割愛する。FirstはいくつかあるMaybe a型の値にどれか一つでもJustがあるかどうかを調べたい時に使う。
+
+### モノイドで畳み込む
+色々なデータ構造の上に畳み込みを定義したい...そんな時はモノイドが活躍する。  
+今までリストの畳み込みしか紹介しなかったが、畳み込みできるデータ構造はリストだけではない。木構造などは畳み込みをしやすい典型例といえる。  
+畳み込みと相性が良いデータ構造は多くあるため、Foldable型クラスが導入された。Functorが関数で写せるものを表すようにFoldableは畳み込みができるものを表している。  
+早速Data.Foldableをインポートして確認してみる。  
+
+```
+*Main> :t foldr
+foldr :: Foldable t => (a -> b -> b) -> b -> t a -> b
+*Main> :t F.foldr
+F.foldr :: Foldable t => (a -> b -> b) -> b -> t a -> b
+```
+
+*2012年時の本が出版された時点ではPreludeで実装されたfoldrではリストしか畳み込みできなかったと考えられる。
+
+実はリストだけではなくFoldable型クラスのインスタンスであれば畳み込みができそうなことが分かる。  
+MaybeやEitherはFoldable型クラスのインスタンスであるので試してみる。
+
+```
+Prelude> foldr (+) 4 $ Just 10
+14
+Prelude> foldr (+) 10 $ Right 10
+20
+```
+
+畳み込みできることはできるが何も面白くない。  
+木構造で畳み込みができたら面白いはずなので木構造で畳み込みができるよう頑張ってみる。  
+七章で出て来た木構造の定義は以下となる。
+
+```
+data Tree a = EmptyNode | Node a (Tree a) (Tree a) deriving Show
+```
+
+この木構造を畳み込みするためにはFoldable型クラスのインスタンス定義をしてやれば良さそうなことが分かる。  
+Foldable型クラスの最小完全定義はfoldMap又はfoldrとなる。  
+教科書曰くfoldMapの方がfoldrよりも簡単なようなのでfoldMapを実装してみることにする。foldMapの型宣言は以下のようになる。
+
+```
+*Main> :t foldMap
+foldMap :: (Monoid m, Foldable t) => (a -> m) -> t a -> m
+```
+
+畳み込みにはモノイドが活躍すると述べた理由はここにある。  
+この型宣言を見ると何かしらの型をとってモノイドを返す関数を第一引数に取り、第二引数にFoldable型のインスタンス型の値をとることでモノイドを返すことが分かる。  
+
+foldMapの動作はFoldableのインスタンス型に包まれた値をモノイドに変換してからmappendで結合していき、最後に得られたモノイド値を返すというものになる。以下は定義。
+
+```
+instance Foldable Tree where
+  foldMap f EmptyNode = mempty
+  foldMap f (Node x left right) = foldMap f left `mappend`
+                                  f x            `mappend`
+                                  foldMap f right
+```
+
+foldMapの結果はモノイド値になることがわかっているのでleft及びrightは再帰的にfoldMapの処理を行い、xにはfを適用してモノイド値を得る。  
+そして最終的に得られたモノイド値の群をmappendしていくことで単一のモノイド値となる。  
+
+f及びmemptyがどのようなモノイド値になることが重要なのではなく、どのような順番で適用していくのかが重要なのでfやmemptyがどのようなモノイド値を返すかは特に定義には出て来ない。
+
+さてこれでTreeをFoldable型クラスのインスタンスにすることができたのでfoldrで畳み込むことができるため色々試してみる(ちなみになぜfoldMapを定義したらfoldrが使えるようになるかまではよく分からなかった。説明にも特になかった)。
+
+```
+// treeを以下のように定義
+tree = Node 10 (Node 5 EmptyNode (Node 8 EmptyNode EmptyNode)) (Node 20 (Node 15 EmptyNode EmptyNode) EmptyNode)
+
+*Main> foldr (+) 0 tree
+58
+*Main> foldr (*) 1 tree
+120000
+
+// もちろんfoldlも動く
+*Main> foldl (*) 1 tree
+120000
+```
+
+ちなみにfoldMapはFoldable型クラスのインスタンス定義に使うだけでなくFoldableなインスタンス値を単一なモノイドに畳みたい時に便利な関数である。以下は使い方例。
+
+```
+// 8の要素を持つノードがあるかを探索
+*Main> getAny $ foldMap (\x -> Any $ x == 8) tree
+True
+
+// リストに変換したい場合
+*Main> foldMap (\x -> [x]) tree
+[5,8,10,15,20]
 ```
