@@ -20,5 +20,16 @@ landLeft n (left, right)
 
 landRight:: Birds -> Pole -> Maybe Pole
 landRight n (left, right)
-  | abs (left - abs (right + n)) < 4 = Just (left, right + n)
+  | abs (left - (right + n)) < 4 = Just (left, right + n)
   | otherwise                        = Nothing
+
+
+banana :: Pole -> Maybe Pole
+banana _ = Nothing
+
+
+foo :: Maybe String
+foo = do
+  x <- Just 3
+  y <- Just "!"
+  Just (show x ++ y)
